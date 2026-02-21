@@ -6,81 +6,118 @@
     <title>默契画一画</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        /* 基础样式保持不变 */
         body { margin: 0; padding: 0; background-color: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'PingFang SC', sans-serif; touch-action: none; }
         .game-board { width: 92vw; max-width: 420px; background-color: #fdfcf8; border: 3px solid #333; border-radius: 20px; padding: 15px; box-sizing: border-box; box-shadow: 4px 4px 0px #e0e0e0; position: relative;}
-        .header { text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; color: #333; }
-        .status-text { text-align: center; font-size: 14px; color: #ff9800; margin-bottom: 15px; height: 20px; font-weight: bold;}
-        .canvas-container { border: 2px dashed #ccc; border-radius: 10px; overflow: hidden; position: relative; height: 55vh; max-height: 450px; display: flex; flex-direction: column; background: #fff;}
+        
+        .header { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 5px; color: #333; }
+        .round-display { color: #8bc34a; font-weight: 900; margin-right: 5px; }
+        .status-text { text-align: center; font-size: 14px; color: #ff9800; margin-bottom: 10px; height: 20px; font-weight: bold; transition: color 0.3s;}
+        
+        .canvas-container { border: 2px dashed #ccc; border-radius: 10px; overflow: hidden; position: relative; height: 50vh; max-height: 400px; display: flex; flex-direction: column; background: #fff;}
         .half-area { flex: 1; position: relative; width: 100%; border-bottom: 2px dashed #ccc; }
         .half-area:last-child { border-bottom: none; }
         .lock-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #eee; display: flex; justify-content: center; align-items: center; flex-direction: column; color: #999; z-index: 10; font-size: 16px;}
-        .lock-icon { font-size: 24px; margin-bottom: 8px; }
+        
         canvas { display: block; width: 100%; height: 100%; }
-        .toolbar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-top: 15px; padding: 12px; background-color: #fff; border: 2px solid #333; border-radius: 15px; }
-        .control-group { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #555; font-weight: bold; }
-        #colorPicker { -webkit-appearance: none; border: 2px solid #333; padding: 0; width: 35px; height: 35px; border-radius: 50%; overflow: hidden; cursor: pointer; }
-        #colorPicker::-webkit-color-swatch-wrapper { padding: 0; } #colorPicker::-webkit-color-swatch { border: none; }
-        .slider-container { flex-grow: 1; min-width: 120px; }
+        
+        /* 核心修改 1：重构工具栏和固定颜色按钮 */
+        .toolbar { margin-top: 15px; padding: 10px; background-color: #fff; border: 2px solid #333; border-radius: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .color-palette { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; }
+        .color-btn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; box-sizing: border-box; transition: transform 0.1s; }
+        .color-btn.active { border-color: #333; transform: scale(1.2); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .bottom-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .slider-container { flex-grow: 1; display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: bold; color: #555; }
         input[type=range] { -webkit-appearance: none; width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; outline: none; border: 1px solid #ccc; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #fff; border: 3px solid #6ba863; border-radius: 50%; cursor: pointer; }
-        .btn-clear { background-color: #e6e4df; border: 2px solid #ccc; padding: 8px 12px; border-radius: 10px; color: #555; font-weight: bold; cursor: pointer; }
-        .submit-btn { width: 100%; padding: 15px; margin-top: 15px; background-color: #d8d8d8; color: #fff; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; transition: all 0.3s; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #fff; border: 3px solid #333; border-radius: 50%; cursor: pointer; }
+        .btn-clear { background-color: #e6e4df; border: 2px solid #ccc; padding: 6px 12px; border-radius: 10px; color: #555; font-weight: bold; cursor: pointer; }
+        
+        .submit-btn { width: 100%; padding: 12px; margin-top: 15px; background-color: #d8d8d8; color: #fff; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; transition: all 0.3s; }
         .submit-btn.active { background-color: #6ba863; box-shadow: 0 4px 8px rgba(107, 168, 99, 0.3); }
         #fullLockScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 50; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #333; border-radius: 15px; text-align: center; padding: 20px;}
         
-        /* --- 结算界面新增与修改样式 --- */
+        /* 结算界面 */
         .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        .result-box { background-color: #fff; padding: 20px; border-radius: 15px; text-align: center; width: 85vw; max-width: 350px; }
+        .result-box { background-color: #fff; padding: 20px; border-radius: 15px; text-align: center; width: 90vw; max-width: 400px; max-height: 90vh; overflow-y: auto;}
         .result-title { font-size: 24px; font-weight: bold; margin-bottom: 5px; color: #333; }
-        .result-word { font-size: 20px; color: #ff9800; font-weight: bold; margin-bottom: 15px; letter-spacing: 2px; }
-        .result-canvas-container { border: 2px solid #333; border-radius: 10px; overflow: hidden; background-color: #fff; margin-bottom: 20px; height: 45vh;}
+        .result-word { font-size: 20px; color: #ff9800; font-weight: bold; margin-bottom: 5px; letter-spacing: 2px; }
+        .partner-notify { font-size: 14px; color: #f44336; height: 20px; font-weight: bold; margin-bottom: 10px; }
+        
+        .result-canvas-container { border: 2px solid #333; border-radius: 10px; overflow: hidden; background-color: #fff; margin-bottom: 20px; height: 45vh; min-height: 250px;}
         #resultCanvas { width: 100%; height: 100%; display: block; }
         
-        /* 新增：双按钮布局 */
         .btn-group { display: flex; gap: 10px; justify-content: space-between; width: 100%; }
         .action-btn { flex: 1; padding: 12px 0; border: none; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s; color: #fff;}
         .btn-continue { background-color: #8bc34a; }
         .btn-continue:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-exit { background-color: #f44336; }
+
+        /* 核心修改 2：画展网格样式 */
+        .gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; text-align: center; }
+        .gallery-item { border: 2px solid #333; border-radius: 8px; overflow: hidden; background: #fff; }
+        .gallery-title { font-weight: bold; padding: 5px 0; border-bottom: 2px solid #333; background: #fdfcf8; font-size: 14px;}
+        .gallery-img-container { display: flex; flex-direction: column; }
+        .gallery-img-container img { width: 100%; display: block; }
     </style>
 </head>
 <body>
 
 <div class="game-board">
     <div id="fullLockScreen">等待服务器连接...</div>
-    <div class="header" id="wordDisplay">- 等待对手 -</div>
+    <div class="header">
+        <span class="round-display" id="roundDisplay"></span>
+        <span id="wordDisplay">- 等待对手 -</span>
+    </div>
     <div class="status-text" id="statusText">正在连接服务器...</div>
     
     <div class="canvas-container">
         <div class="half-area" id="topArea">
-            <div class="lock-overlay" id="topLock"><div class="lock-icon">🔒</div><div id="topLockText">等待分配...</div></div>
+            <div class="lock-overlay" id="topLock"><div style="font-size:24px; margin-bottom:8px;">🔒</div><div id="topLockText">等待分配...</div></div>
             <canvas id="topCanvas"></canvas>
         </div>
         <div class="half-area" id="bottomArea">
-            <div class="lock-overlay" id="bottomLock"><div class="lock-icon">🔒</div><div id="bottomLockText">等待分配...</div></div>
+            <div class="lock-overlay" id="bottomLock"><div style="font-size:24px; margin-bottom:8px;">🔒</div><div id="bottomLockText">等待分配...</div></div>
             <canvas id="bottomCanvas"></canvas>
         </div>
     </div>
 
     <div class="toolbar">
-        <div class="control-group"><input type="color" id="colorPicker" value="#6ba863"></div>
-        <div class="control-group slider-container"><input type="range" id="lineWidthSlider" min="1" max="20" value="5"></div>
-        <button class="btn-clear" id="clearBtn">清空</button>
+        <div class="color-palette" id="colorPalette"></div>
+        <div class="bottom-tools">
+            <div class="slider-container">
+                粗细 <input type="range" id="lineWidthSlider" min="1" max="20" value="5">
+            </div>
+            <button class="btn-clear" id="clearBtn">清空</button>
+        </div>
     </div>
-    <button class="submit-btn" id="submitBtn">提交我的那部分</button>
+    <button class="submit-btn" id="submitBtn">提交我的画作</button>
 </div>
 
 <div class="overlay" id="settlementScreen">
     <div class="result-box">
-        <div class="result-title">✨ 你们的杰作 ✨</div>
+        <div class="result-title">✨ 本轮杰作 ✨</div>
         <div class="result-word" id="resultWordDisplay">题目</div>
-        <div class="result-canvas-container">
-            <canvas id="resultCanvas"></canvas>
-        </div>
+        <div class="partner-notify" id="settleNotify"></div>
+        
+        <div class="result-canvas-container"><canvas id="resultCanvas"></canvas></div>
+        
         <div class="btn-group">
-            <button class="action-btn btn-continue" id="continueBtn">继续游戏</button>
+            <button class="action-btn btn-continue" id="continueBtn">继续下一轮</button>
             <button class="action-btn btn-exit" id="exitBtn">退出游戏</button>
+        </div>
+    </div>
+</div>
+
+<div class="overlay" id="galleryScreen">
+    <div class="result-box" style="width: 95vw; max-width: 500px;">
+        <div class="result-title">🏆 我们的艺术画展 🏆</div>
+        <div class="partner-notify" id="galleryNotify" style="margin-top: 5px;"></div>
+        
+        <div class="gallery-grid" id="galleryGrid">
+            </div>
+        
+        <div class="btn-group">
+            <button class="action-btn btn-continue" id="galleryRestartBtn">再来一局 (全新6词)</button>
+            <button class="action-btn btn-exit" id="galleryExitBtn">退出游戏</button>
         </div>
     </div>
 </div>
@@ -88,16 +125,24 @@
 <script>
     const socket = io(); 
     
+    // UI 元素
+    const roundDisplay = document.getElementById('roundDisplay');
     const wordDisplay = document.getElementById('wordDisplay');
     const statusText = document.getElementById('statusText');
     const fullLockScreen = document.getElementById('fullLockScreen');
-    const settlementScreen = document.getElementById('settlementScreen');
     const submitBtn = document.getElementById('submitBtn');
     
-    // 按钮相关
+    const settlementScreen = document.getElementById('settlementScreen');
+    const resultWordDisplay = document.getElementById('resultWordDisplay');
+    const settleNotify = document.getElementById('settleNotify');
     const continueBtn = document.getElementById('continueBtn');
     const exitBtn = document.getElementById('exitBtn');
-    const resultWordDisplay = document.getElementById('resultWordDisplay');
+
+    const galleryScreen = document.getElementById('galleryScreen');
+    const galleryGrid = document.getElementById('galleryGrid');
+    const galleryNotify = document.getElementById('galleryNotify');
+    const galleryRestartBtn = document.getElementById('galleryRestartBtn');
+    const galleryExitBtn = document.getElementById('galleryExitBtn');
     
     const topCanvas = document.getElementById('topCanvas');
     const bottomCanvas = document.getElementById('bottomCanvas');
@@ -107,10 +152,27 @@
 
     let isDrawing = false; 
     let hasDrawn = false;
-    let currentColor = '#6ba863';
+    let currentColor = '#000000'; // 默认黑色
     let currentLineWidth = 5;
-    let currentWord = ""; // 【新增】保存当前的题目用于结算页展示
+    let currentWord = "";
 
+    // --- 初始化固定调色板 ---
+    const colors = ['#000000', '#7f7f7f', '#ed1c24', '#ff7f27', '#fff200', '#22b14c', '#00a2e8', '#3f48cc', '#a349a4', '#b97a57'];
+    const palette = document.getElementById('colorPalette');
+    colors.forEach(c => {
+        let btn = document.createElement('div');
+        btn.className = 'color-btn';
+        btn.style.backgroundColor = c;
+        if(c === currentColor) btn.classList.add('active');
+        btn.onclick = () => {
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentColor = c;
+        };
+        palette.appendChild(btn);
+    });
+
+    // --- Socket 逻辑 ---
     socket.on('assign_role', (role) => {
         myRole = role;
         topCanvas.width = topCanvas.parentElement.clientWidth; topCanvas.height = topCanvas.parentElement.clientHeight;
@@ -131,25 +193,28 @@
         bindDrawingEvents(); 
     });
 
-    socket.on('system_msg', (msg) => { statusText.textContent = msg; });
+    socket.on('system_msg', (msg) => { statusText.textContent = msg; statusText.style.color = '#ff9800'; });
 
-    // 【修改】游戏开始时重置所有状态，包括“继续按钮”
-    socket.on('game_start', (word) => {
-        currentWord = word; // 记录题目
-        wordDisplay.textContent = `- ${word} -`;
+    // 游戏/回合开始
+    socket.on('game_start', (data) => {
+        currentWord = data.word; 
+        roundDisplay.textContent = `[${data.round}/${data.total}]`;
+        wordDisplay.textContent = `- ${data.word} -`;
         statusText.textContent = "游戏开始！请在你的区域作画";
+        statusText.style.color = '#ff9800';
+        
         fullLockScreen.style.display = 'none';
-        settlementScreen.style.display = 'none'; // 隐藏结算画面
+        settlementScreen.style.display = 'none'; 
+        galleryScreen.style.display = 'none';
+        
         hasDrawn = false;
         submitBtn.classList.remove('active');
-        
-        // 清空自己的画板
         if(ctx) ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
         
-        // 恢复“继续”按钮的状态
-        continueBtn.disabled = false;
-        continueBtn.textContent = '继续游戏';
-        continueBtn.style.backgroundColor = '#8bc34a';
+        // 重置所有的按钮和提示语状态
+        continueBtn.disabled = false; continueBtn.textContent = '继续下一轮'; continueBtn.style.backgroundColor = '#8bc34a';
+        galleryRestartBtn.disabled = false; galleryRestartBtn.textContent = '再来一局 (全新6词)'; galleryRestartBtn.style.backgroundColor = '#8bc34a';
+        settleNotify.textContent = ''; galleryNotify.textContent = '';
         
         if (myRole === 'top') {
             document.getElementById('bottomLockText').textContent = '对方作画中...';
@@ -158,49 +223,81 @@
         }
     });
 
+    // 【新增】对方已画完提示
+    socket.on('partner_submitted', () => {
+        if (!hasDrawn || !submitBtn.classList.contains('active') || fullLockScreen.style.display === 'none') {
+            statusText.textContent = "👉 对方已交卷，赶紧画，等你咯！";
+            statusText.style.color = "#f44336";
+        }
+    });
+
+    // 【新增】对方已点继续提示
+    socket.on('partner_continued', () => {
+        settleNotify.textContent = "👉 对方已准备好，就等你了！";
+        galleryNotify.textContent = "👉 对方想再来一局，等你确认！";
+    });
+
+    // 某回合结束，展示合成图
     socket.on('game_over', (drawings) => {
         showSettlement(drawings.top, drawings.bottom);
     });
 
-    // 【核心修改】对方退出后，不再无脑刷新网页，而是平滑过渡回等待状态
+    // 【新增】6轮结束，展示画展
+    socket.on('show_gallery', (galleryData) => {
+        settlementScreen.style.display = 'none';
+        galleryScreen.style.display = 'flex';
+        
+        galleryGrid.innerHTML = '';
+        galleryData.forEach((item, index) => {
+            galleryGrid.innerHTML += `
+                <div class="gallery-item">
+                    <div class="gallery-title">${index + 1}. ${item.word}</div>
+                    <div class="gallery-img-container">
+                        <img src="${item.top}">
+                        <img src="${item.bottom}" style="border-top: 2px dashed #ccc;">
+                    </div>
+                </div>
+            `;
+        });
+    });
+
     socket.on('reset_game', () => { 
         settlementScreen.style.display = 'none';
+        galleryScreen.style.display = 'none';
         fullLockScreen.style.display = 'flex';
         fullLockScreen.textContent = '对方已退出游戏，等待新玩家加入...';
+        roundDisplay.textContent = '';
         wordDisplay.textContent = '- 等待对手 -';
         if(ctx) ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
-        hasDrawn = false;
-        submitBtn.classList.remove('active');
+        hasDrawn = false; submitBtn.classList.remove('active');
     });
     
     // --- 按钮事件监听 ---
-    
-    // 点击继续游戏
-    continueBtn.addEventListener('click', () => {
-        continueBtn.disabled = true;
-        continueBtn.textContent = '等待对方...';
-        continueBtn.style.backgroundColor = '#ccc';
-        socket.emit('request_continue'); // 告诉服务器我准备好了
-    });
-    
-    // 点击退出游戏
-    exitBtn.addEventListener('click', () => {
-        socket.emit('request_exit'); // 告诉服务器我要走了
-        window.location.reload(); // 仅刷新自己的页面（释放之前的连接资源）
-    });
+    function sendContinue(btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '等待对方...';
+        btnEl.style.backgroundColor = '#ccc';
+        socket.emit('request_continue'); 
+    }
 
-    // --- 画画相关的逻辑维持不变 ---
-    document.getElementById('colorPicker').addEventListener('input', (e) => currentColor = e.target.value);
+    continueBtn.addEventListener('click', () => sendContinue(continueBtn));
+    galleryRestartBtn.addEventListener('click', () => sendContinue(galleryRestartBtn));
+    
+    function sendExit() {
+        socket.emit('request_exit'); 
+        window.location.reload(); 
+    }
+    exitBtn.addEventListener('click', sendExit);
+    galleryExitBtn.addEventListener('click', sendExit);
+
+    // --- 画板绘制逻辑 ---
     document.getElementById('lineWidthSlider').addEventListener('input', (e) => currentLineWidth = e.target.value);
 
     function getPos(e) {
         const rect = activeCanvas.getBoundingClientRect(); 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { 
-            x: (clientX - rect.left) * (activeCanvas.width / rect.width), 
-            y: (clientY - rect.top) * (activeCanvas.height / rect.height) 
-        };
+        return { x: (clientX - rect.left) * (activeCanvas.width / rect.width), y: (clientY - rect.top) * (activeCanvas.height / rect.height) };
     }
 
     function startDrawing(e) {
@@ -215,12 +312,9 @@
     function stopDrawing(e) { if (isDrawing) { if (e.cancelable) e.preventDefault(); isDrawing = false; ctx.closePath(); } }
 
     function bindDrawingEvents() {
-        activeCanvas.addEventListener('mousedown', startDrawing);
-        activeCanvas.addEventListener('mousemove', draw);
-        activeCanvas.addEventListener('mouseup', stopDrawing);
-        activeCanvas.addEventListener('mouseout', stopDrawing);
-        activeCanvas.addEventListener('touchstart', startDrawing, {passive: false});
-        activeCanvas.addEventListener('touchmove', draw, {passive: false});
+        activeCanvas.addEventListener('mousedown', startDrawing); activeCanvas.addEventListener('mousemove', draw);
+        activeCanvas.addEventListener('mouseup', stopDrawing); activeCanvas.addEventListener('mouseout', stopDrawing);
+        activeCanvas.addEventListener('touchstart', startDrawing, {passive: false}); activeCanvas.addEventListener('touchmove', draw, {passive: false});
         activeCanvas.addEventListener('touchend', stopDrawing, {passive: false});
     }
 
@@ -237,26 +331,21 @@
     });
 
     function showSettlement(topBase64, bottomBase64) {
-        // 【新增】在结算页把当前题目展示出来
         resultWordDisplay.textContent = `[ ${currentWord} ]`;
-        
         const resCanvas = document.getElementById('resultCanvas');
         const resCtx = resCanvas.getContext('2d');
-        resCanvas.width = topCanvas.width;
-        resCanvas.height = topCanvas.height + bottomCanvas.height; 
+        resCanvas.width = topCanvas.width; resCanvas.height = topCanvas.height + bottomCanvas.height; 
 
         const imgTop = new Image(); const imgBottom = new Image();
         let loaded = 0;
         function drawResult() {
             loaded++;
             if (loaded === 2) {
-                resCtx.fillStyle = '#ffffff';
-                resCtx.fillRect(0, 0, resCanvas.width, resCanvas.height);
+                resCtx.fillStyle = '#ffffff'; resCtx.fillRect(0, 0, resCanvas.width, resCanvas.height);
                 resCtx.drawImage(imgTop, 0, 0, resCanvas.width, topCanvas.height);
                 resCtx.drawImage(imgBottom, 0, topCanvas.height, resCanvas.width, bottomCanvas.height);
                 
-                resCtx.beginPath(); resCtx.setLineDash([5, 5]);
-                resCtx.moveTo(0, topCanvas.height); resCtx.lineTo(resCanvas.width, topCanvas.height);
+                resCtx.beginPath(); resCtx.setLineDash([5, 5]); resCtx.moveTo(0, topCanvas.height); resCtx.lineTo(resCanvas.width, topCanvas.height);
                 resCtx.strokeStyle = '#999'; resCtx.lineWidth = 2; resCtx.stroke();
                 
                 settlementScreen.style.display = 'flex';
