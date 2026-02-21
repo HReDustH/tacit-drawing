@@ -7,8 +7,33 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'PingFang SC', sans-serif; touch-action: none; }
-        .game-board { width: 92vw; max-width: 420px; background-color: #fdfcf8; border: 3px solid #333; border-radius: 20px; padding: 15px; box-sizing: border-box; box-shadow: 4px 4px 0px #e0e0e0; position: relative;}
+        .game-board { width: 92vw; max-width: 420px; background-color: #fdfcf8; border: 3px solid #333; border-radius: 20px; padding: 15px; box-sizing: border-box; box-shadow: 4px 4px 0px #e0e0e0; position: relative; display: none; /* 默认隐藏，等进了房间再显示 */}
         
+        /* --- 大厅/登录页样式 --- */
+        .lobby-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #fdfcf8; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; overflow-y: auto;}
+        .lobby-box { width: 90vw; max-width: 380px; text-align: center; }
+        .lobby-title { font-size: 32px; font-weight: 900; color: #333; margin-bottom: 30px; letter-spacing: 2px; text-shadow: 2px 2px 0px #8bc34a;}
+        
+        .profile-section { background: #fff; padding: 20px; border-radius: 15px; border: 2px solid #333; margin-bottom: 20px; box-shadow: 3px 3px 0px #ccc; }
+        .username-input { width: 80%; padding: 10px; font-size: 16px; border: 2px solid #ccc; border-radius: 8px; margin-bottom: 15px; text-align: center; outline: none; font-weight: bold;}
+        .username-input:focus { border-color: #8bc34a; }
+        .avatar-picker { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+        .avatar-btn { font-size: 30px; cursor: pointer; padding: 5px; border-radius: 50%; border: 2px solid transparent; transition: all 0.2s; background: #f5f5f5; width: 45px; height: 45px; display: flex; justify-content: center; align-items: center;}
+        .avatar-btn.selected { border-color: #8bc34a; background: #e8f5e9; transform: scale(1.1); }
+        
+        .create-btn { width: 100%; padding: 15px; background-color: #ff9800; color: #fff; border: 2px solid #333; border-radius: 25px; font-size: 18px; font-weight: bold; cursor: pointer; transition: transform 0.1s; box-shadow: 0 4px 0 #e65100;}
+        .create-btn:active { transform: translateY(4px); box-shadow: none; }
+        
+        .room-list-section { background: #fff; padding: 20px; border-radius: 15px; border: 2px solid #333; box-shadow: 3px 3px 0px #ccc; text-align: left;}
+        .room-list-title { font-size: 18px; font-weight: bold; color: #555; margin-bottom: 10px; display: flex; justify-content: space-between;}
+        .room-item { padding: 12px; background: #f9f9f9; border: 2px solid #ddd; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .room-info { display: flex; flex-direction: column; }
+        .room-owner { font-weight: bold; font-size: 16px; color: #333;}
+        .room-count { font-size: 12px; color: #888; }
+        .join-btn { padding: 8px 15px; background: #8bc34a; color: white; border: none; border-radius: 15px; font-weight: bold; cursor: pointer; }
+        .join-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* --- 游戏主界面样式 --- */
         .header { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 5px; color: #333; }
         .round-display { color: #8bc34a; font-weight: 900; margin-right: 5px; }
         .status-text { text-align: center; font-size: 14px; color: #ff9800; margin-bottom: 10px; height: 20px; font-weight: bold; transition: color 0.3s;}
@@ -17,6 +42,9 @@
         .half-area { flex: 1; position: relative; width: 100%; border-bottom: 2px dashed #ccc; }
         .half-area:last-child { border-bottom: none; }
         .lock-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #eee; display: flex; justify-content: center; align-items: center; flex-direction: column; color: #999; z-index: 10; font-size: 16px;}
+        .partner-profile { display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; }
+        .partner-avatar { font-size: 40px; margin-bottom: 5px; }
+        .partner-name { font-weight: bold; color: #555; }
         
         canvas { display: block; width: 100%; height: 100%; }
         
@@ -30,7 +58,6 @@
         input[type=range] { -webkit-appearance: none; width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; outline: none; border: 1px solid #ccc; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #fff; border: 3px solid #333; border-radius: 50%; cursor: pointer; }
         .btn-tool { background-color: #e6e4df; border: 2px solid #ccc; padding: 6px 10px; border-radius: 10px; color: #555; font-weight: bold; cursor: pointer; font-size: 13px;}
-        .btn-tool:active { background-color: #ccc;}
         
         .submit-btn { width: 100%; padding: 12px; margin-top: 15px; background-color: #d8d8d8; color: #fff; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; transition: all 0.3s; }
         .submit-btn.active { background-color: #6ba863; box-shadow: 0 4px 8px rgba(107, 168, 99, 0.3); }
@@ -58,8 +85,32 @@
 </head>
 <body>
 
-<div class="game-board">
-    <div id="fullLockScreen">等待服务器连接...</div>
+<div class="lobby-screen" id="lobbyScreen">
+    <div class="lobby-box">
+        <div class="lobby-title">🎨 默契画一画</div>
+        
+        <div class="profile-section">
+            <input type="text" id="usernameInput" class="username-input" placeholder="输入你的昵称" maxlength="8">
+            <div style="font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold;">选择一个代表你的头像：</div>
+            <div class="avatar-picker" id="avatarPicker">
+                </div>
+            <button class="create-btn" id="createRoomBtn">自己建个房间</button>
+        </div>
+
+        <div class="room-list-section">
+            <div class="room-list-title">
+                <span>现有房间列表</span>
+                <span id="roomCountText" style="color: #8bc34a; font-size: 14px;">0/3</span>
+            </div>
+            <div id="roomList">
+                <div style="text-align: center; color: #999; padding: 10px; font-size: 14px;">暂无空闲房间，快去建一个吧！</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="game-board" id="gameBoard">
+    <div id="fullLockScreen">等待房主的好友加入...</div>
     <div class="header">
         <span class="round-display" id="roundDisplay"></span>
         <span id="wordDisplay">- 等待对手 -</span>
@@ -68,11 +119,21 @@
     
     <div class="canvas-container">
         <div class="half-area" id="topArea">
-            <div class="lock-overlay" id="topLock"><div style="font-size:24px; margin-bottom:8px;">🔒</div><div id="topLockText">等待分配...</div></div>
+            <div class="lock-overlay" id="topLock">
+                <div class="partner-profile">
+                    <div class="partner-avatar" id="topAvatar">🔒</div>
+                    <div class="partner-name" id="topName">等待分配...</div>
+                </div>
+            </div>
             <canvas id="topCanvas"></canvas>
         </div>
         <div class="half-area" id="bottomArea">
-            <div class="lock-overlay" id="bottomLock"><div style="font-size:24px; margin-bottom:8px;">🔒</div><div id="bottomLockText">等待分配...</div></div>
+            <div class="lock-overlay" id="bottomLock">
+                <div class="partner-profile">
+                    <div class="partner-avatar" id="bottomAvatar">🔒</div>
+                    <div class="partner-name" id="bottomName">等待分配...</div>
+                </div>
+            </div>
             <canvas id="bottomCanvas"></canvas>
         </div>
     </div>
@@ -100,7 +161,7 @@
         <div class="result-canvas-container"><canvas id="resultCanvas"></canvas></div>
         <div class="btn-group">
             <button class="action-btn btn-continue" id="continueBtn">继续下一轮</button>
-            <button class="action-btn btn-exit" id="exitBtn">退出游戏</button>
+            <button class="action-btn btn-exit" onclick="backToLobby()">返回大厅</button>
         </div>
     </div>
 </div>
@@ -112,7 +173,7 @@
         <div class="gallery-grid" id="galleryGrid"></div>
         <div class="btn-group">
             <button class="action-btn btn-continue" id="galleryRestartBtn">再来一局</button>
-            <button class="action-btn btn-exit" id="galleryExitBtn">退出游戏</button>
+            <button class="action-btn btn-exit" onclick="backToLobby()">返回大厅</button>
         </div>
     </div>
 </div>
@@ -120,7 +181,106 @@
 <script>
     const socket = io(); 
     
-    // UI 元素
+    // --- 大厅逻辑 ---
+    const lobbyScreen = document.getElementById('lobbyScreen');
+    const gameBoard = document.getElementById('gameBoard');
+    const usernameInput = document.getElementById('usernameInput');
+    const avatarPicker = document.getElementById('avatarPicker');
+    
+    const avatars = ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼', '🐸', '🐷'];
+    let myAvatar = '🐶'; // 默认头像
+
+    // 生成头像选择器
+    avatars.forEach(emoji => {
+        let btn = document.createElement('div');
+        btn.className = 'avatar-btn';
+        btn.textContent = emoji;
+        if(emoji === myAvatar) btn.classList.add('selected');
+        btn.onclick = () => {
+            document.querySelectorAll('.avatar-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            myAvatar = emoji;
+        };
+        avatarPicker.appendChild(btn);
+    });
+
+    // 获取个人资料
+    function getProfile() {
+        let name = usernameInput.value.trim();
+        if (!name) name = "神秘画家" + Math.floor(Math.random() * 100);
+        return { name, avatar: myAvatar };
+    }
+
+    // 建房
+    document.getElementById('createRoomBtn').addEventListener('click', () => {
+        socket.emit('create_room', getProfile());
+    });
+
+    // 加入房间
+    function joinRoom(roomId) {
+        socket.emit('join_room', { roomId, userProfile: getProfile() });
+    }
+
+    // 更新房间列表
+    socket.on('room_list_update', (rooms) => {
+        const roomList = document.getElementById('roomList');
+        document.getElementById('roomCountText').textContent = `${rooms.length}/3`;
+        
+        if (rooms.length === 0) {
+            roomList.innerHTML = '<div style="text-align: center; color: #999; padding: 10px; font-size: 14px;">暂无空闲房间，快去建一个吧！</div>';
+            return;
+        }
+
+        roomList.innerHTML = '';
+        rooms.forEach(room => {
+            const isFull = room.playerCount >= 2;
+            const btnHtml = isFull 
+                ? `<button class="join-btn" disabled>已满</button>`
+                : `<button class="join-btn" onclick="joinRoom('${room.id}')">加入</button>`;
+            
+            roomList.innerHTML += `
+                <div class="room-item">
+                    <div class="room-info">
+                        <span class="room-owner">${room.ownerName} 的房间</span>
+                        <span class="room-count">玩家: ${room.playerCount}/2</span>
+                    </div>
+                    ${btnHtml}
+                </div>
+            `;
+        });
+    });
+
+    // 成功进入房间
+    socket.on('room_joined', (data) => {
+        lobbyScreen.style.display = 'none';
+        gameBoard.style.display = 'block';
+        resizeCanvas();
+        fullLockScreen.style.display = 'flex';
+        fullLockScreen.textContent = data.isOwner ? '房间创建成功！等待好友加入...' : '加入成功！等待游戏开始...';
+    });
+
+    // 房间解散或对方退出
+    socket.on('room_closed', (msg) => {
+        alert(msg);
+        backToLobby();
+    });
+
+    // 收到系统通知（房间满了等）
+    socket.on('system_msg', (msg) => {
+        if(lobbyScreen.style.display !== 'none') {
+            alert(msg); // 在大厅就弹窗
+        } else {
+            statusText.textContent = msg; // 在游戏里就更新文字
+        }
+    });
+
+    // 返回大厅刷新页面
+    function backToLobby() {
+        window.location.reload();
+    }
+
+
+    // --- 游戏内部逻辑 ---
     const roundDisplay = document.getElementById('roundDisplay');
     const wordDisplay = document.getElementById('wordDisplay');
     const statusText = document.getElementById('statusText');
@@ -145,14 +305,12 @@
 
     let paths = []; 
     let currentPath = null; 
-
     let isDrawing = false; 
     let hasDrawn = false;
     let currentColor = '#000000'; 
     let currentLineWidth = 5;
     let currentWord = "";
 
-    // --- 颜色更新：将最后一个替换为极具区分度的青色 #00ffff ---
     const colors = [
         '#000000', '#555555', '#aaaaaa', '#ffffff', 
         '#ed1c24', '#ff7f27', '#fff200', '#b5e61d', 
@@ -182,8 +340,7 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    socket.on('system_msg', (msg) => { statusText.textContent = msg; statusText.style.color = '#ff9800'; });
-
+    // 【修改】游戏开始时，在锁定的画布上显示对方的头像和名字
     socket.on('game_start', (data) => {
         myRole = data.role;
         currentWord = data.word; 
@@ -198,8 +355,15 @@
         
         document.getElementById('topLock').style.display = myRole === 'top' ? 'none' : 'flex';
         document.getElementById('bottomLock').style.display = myRole === 'bottom' ? 'none' : 'flex';
-        document.getElementById('topLockText').textContent = myRole === 'bottom' ? '对方作画中...' : '';
-        document.getElementById('bottomLockText').textContent = myRole === 'top' ? '对方作画中...' : '';
+        
+        // 把资料写到对应的锁定区域上
+        if (myRole === 'bottom') {
+            document.getElementById('topAvatar').textContent = data.partnerAvatar;
+            document.getElementById('topName').textContent = data.partnerName + ' 作画中...';
+        } else {
+            document.getElementById('bottomAvatar').textContent = data.partnerAvatar;
+            document.getElementById('bottomName').textContent = data.partnerName + ' 作画中...';
+        }
 
         activeCanvas = myRole === 'top' ? topCanvas : bottomCanvas;
         resizeCanvas();
@@ -223,11 +387,7 @@
     });
 
     socket.on('partner_continued', () => {
-        // 如果当前没在画展界面（即处在每局的结算界面），才更新结算提示
-        if (galleryScreen.style.display !== 'flex') {
-            settleNotify.textContent = "👉 对方已准备好，就等你了！";
-        }
-        // 画展页面的提示也更新，但如果是在第 6 轮结算时点的继续，进入画展时会被清理掉（见下方修复）
+        if (galleryScreen.style.display !== 'flex') { settleNotify.textContent = "👉 对方已准备好，就等你了！"; }
         galleryNotify.textContent = "👉 对方想再来一局，等你确认！";
     });
 
@@ -236,12 +396,8 @@
     socket.on('show_gallery', (galleryData) => {
         settlementScreen.style.display = 'none'; 
         galleryScreen.style.display = 'flex';
-        
-        // 【核心修复】强制清空上一轮残留的继续提示，恢复按钮默认状态
         galleryNotify.textContent = '';
-        galleryRestartBtn.disabled = false; 
-        galleryRestartBtn.textContent = '再来一局 (全新6词)'; 
-        galleryRestartBtn.style.backgroundColor = '#8bc34a';
+        galleryRestartBtn.disabled = false; galleryRestartBtn.textContent = '再来一局 (全新6词)'; galleryRestartBtn.style.backgroundColor = '#8bc34a';
         
         galleryGrid.innerHTML = '';
         galleryData.forEach((item, index) => {
@@ -253,14 +409,6 @@
         });
     });
 
-    socket.on('reset_game', () => { 
-        settlementScreen.style.display = 'none'; galleryScreen.style.display = 'none';
-        fullLockScreen.style.display = 'flex'; fullLockScreen.textContent = '对方已退出游戏，等待新玩家加入...';
-        roundDisplay.textContent = ''; wordDisplay.textContent = '- 等待对手 -';
-        paths = []; hasDrawn = false; submitBtn.classList.remove('active');
-        if(ctx) ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
-    });
-    
     function sendContinue(btnEl) {
         btnEl.disabled = true; btnEl.textContent = '等待对方...'; btnEl.style.backgroundColor = '#ccc';
         socket.emit('request_continue'); 
@@ -268,10 +416,7 @@
     continueBtn.addEventListener('click', () => sendContinue(continueBtn));
     galleryRestartBtn.addEventListener('click', () => sendContinue(galleryRestartBtn));
     
-    function sendExit() { socket.emit('request_exit'); window.location.reload(); }
-    document.getElementById('exitBtn').addEventListener('click', sendExit);
-    document.getElementById('galleryExitBtn').addEventListener('click', sendExit);
-
+    // --- 绘画逻辑 ---
     document.getElementById('lineWidthSlider').addEventListener('input', (e) => currentLineWidth = e.target.value);
 
     function getPos(e) {
@@ -302,10 +447,7 @@
     function stopDrawing(e) { 
         if (isDrawing) { 
             if (e.cancelable) e.preventDefault(); 
-            isDrawing = false; 
-            ctx.closePath(); 
-            paths.push(currentPath); 
-            checkStatus();
+            isDrawing = false; ctx.closePath(); paths.push(currentPath); checkStatus();
         } 
     }
 
@@ -319,9 +461,7 @@
     function redrawAll() {
         ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
         paths.forEach(path => {
-            ctx.beginPath();
-            ctx.strokeStyle = path.color;
-            ctx.lineWidth = path.width;
+            ctx.beginPath(); ctx.strokeStyle = path.color; ctx.lineWidth = path.width;
             if (path.points.length > 0) {
                 ctx.moveTo(path.points[0].x, path.points[0].y);
                 path.points.forEach(p => ctx.lineTo(p.x, p.y));
@@ -333,17 +473,11 @@
 
     function checkStatus() {
         hasDrawn = paths.length > 0;
-        if (hasDrawn) submitBtn.classList.add('active');
-        else submitBtn.classList.remove('active');
+        if (hasDrawn) submitBtn.classList.add('active'); else submitBtn.classList.remove('active');
     }
 
-    document.getElementById('undoBtn').addEventListener('click', () => {
-        if (paths.length > 0) { paths.pop(); redrawAll(); }
-    });
-
-    document.getElementById('clearBtn').addEventListener('click', () => {
-        paths = []; redrawAll();
-    });
+    document.getElementById('undoBtn').addEventListener('click', () => { if (paths.length > 0) { paths.pop(); redrawAll(); } });
+    document.getElementById('clearBtn').addEventListener('click', () => { paths = []; redrawAll(); });
 
     submitBtn.addEventListener('click', () => {
         if (!hasDrawn) return alert("请先画点什么吧！");
