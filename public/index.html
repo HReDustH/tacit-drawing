@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>双人拼图画画 - 终极画展版</title>
+    <title>默契画一画</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'PingFang SC', sans-serif; touch-action: none; }
@@ -20,13 +20,11 @@
         
         canvas { display: block; width: 100%; height: 100%; }
         
-        /* --- 调色板优化：16色 --- */
         .toolbar { margin-top: 15px; padding: 10px; background-color: #fff; border: 2px solid #333; border-radius: 15px; display: flex; flex-direction: column; gap: 10px; }
         .color-palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; justify-items: center; }
         .color-btn { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; box-sizing: border-box; transition: transform 0.1s; }
         .color-btn.active { border-color: #333; transform: scale(1.2); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         
-        /* --- 底部工具栏优化：加入撤销 --- */
         .bottom-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .slider-container { flex-grow: 1; display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: bold; color: #555; }
         input[type=range] { -webkit-appearance: none; width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; outline: none; border: 1px solid #ccc; }
@@ -38,7 +36,6 @@
         .submit-btn.active { background-color: #6ba863; box-shadow: 0 4px 8px rgba(107, 168, 99, 0.3); }
         #fullLockScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 50; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #333; border-radius: 15px; text-align: center; padding: 20px;}
         
-        /* 结算界面 */
         .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
         .result-box { background-color: #fff; padding: 20px; border-radius: 15px; text-align: center; width: 90vw; max-width: 400px; max-height: 90vh; overflow-y: auto;}
         .result-title { font-size: 24px; font-weight: bold; margin-bottom: 5px; color: #333; }
@@ -52,7 +49,6 @@
         .btn-continue:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-exit { background-color: #f44336; }
 
-        /* 画展网格样式 */
         .gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; text-align: center; }
         .gallery-item { border: 2px solid #333; border-radius: 8px; overflow: hidden; background: #fff; }
         .gallery-title { font-weight: bold; padding: 5px 0; border-bottom: 2px solid #333; background: #fdfcf8; font-size: 14px;}
@@ -111,7 +107,7 @@
 
 <div class="overlay" id="galleryScreen">
     <div class="result-box" style="width: 95vw; max-width: 500px;">
-        <div class="result-title">🏆 我们的艺术画展 🏆</div>
+        <div class="result-title">🏆 默契画一画 - 最终画展 🏆</div>
         <div class="partner-notify" id="galleryNotify" style="margin-top: 5px;"></div>
         <div class="gallery-grid" id="galleryGrid"></div>
         <div class="btn-group">
@@ -147,9 +143,8 @@
     let activeCanvas = null; 
     let ctx = null;          
 
-    // --- 撤销功能的底层结构：记录每一笔的数组 ---
-    let paths = []; // 存放所有笔画
-    let currentPath = null; // 当前正在画的一笔
+    let paths = []; 
+    let currentPath = null; 
 
     let isDrawing = false; 
     let hasDrawn = false;
@@ -157,13 +152,14 @@
     let currentLineWidth = 5;
     let currentWord = "";
 
-    // --- 初始化 16色 调色板 (包含 #ffffff 白色) ---
+    // --- 颜色更新：将最后一个替换为极具区分度的青色 #00ffff ---
     const colors = [
         '#000000', '#555555', '#aaaaaa', '#ffffff', 
         '#ed1c24', '#ff7f27', '#fff200', '#b5e61d', 
         '#22b14c', '#00a2e8', '#3f48cc', '#a349a4', 
-        '#ffa3b1', '#b97a57', '#ffc90e', '#ffb6c1'
+        '#ffa3b1', '#b97a57', '#ffc90e', '#00ffff'
     ];
+    
     const palette = document.getElementById('colorPalette');
     colors.forEach(c => {
         let btn = document.createElement('div');
@@ -179,7 +175,7 @@
     });
 
     function resizeCanvas() {
-        if(topCanvas.parentElement.clientWidth === 0) return; // 防止隐藏时尺寸为0
+        if(topCanvas.parentElement.clientWidth === 0) return; 
         topCanvas.width = topCanvas.parentElement.clientWidth; topCanvas.height = topCanvas.parentElement.clientHeight;
         bottomCanvas.width = bottomCanvas.parentElement.clientWidth; bottomCanvas.height = bottomCanvas.parentElement.clientHeight;
         if(ctx) { ctx.lineCap = 'round'; ctx.lineJoin = 'round'; redrawAll(); }
@@ -188,7 +184,6 @@
 
     socket.on('system_msg', (msg) => { statusText.textContent = msg; statusText.style.color = '#ff9800'; });
 
-    // 每轮开始时动态分配上下画板
     socket.on('game_start', (data) => {
         myRole = data.role;
         currentWord = data.word; 
@@ -201,7 +196,6 @@
         settlementScreen.style.display = 'none'; 
         galleryScreen.style.display = 'none';
         
-        // 动态解除自己区域的锁，锁住对方区域
         document.getElementById('topLock').style.display = myRole === 'top' ? 'none' : 'flex';
         document.getElementById('bottomLock').style.display = myRole === 'bottom' ? 'none' : 'flex';
         document.getElementById('topLockText').textContent = myRole === 'bottom' ? '对方作画中...' : '';
@@ -212,7 +206,6 @@
         ctx = activeCanvas.getContext('2d');
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
-        // 清空绘画状态
         paths = [];
         hasDrawn = false;
         submitBtn.classList.remove('active');
@@ -230,14 +223,26 @@
     });
 
     socket.on('partner_continued', () => {
-        settleNotify.textContent = "👉 对方已准备好，就等你了！";
+        // 如果当前没在画展界面（即处在每局的结算界面），才更新结算提示
+        if (galleryScreen.style.display !== 'flex') {
+            settleNotify.textContent = "👉 对方已准备好，就等你了！";
+        }
+        // 画展页面的提示也更新，但如果是在第 6 轮结算时点的继续，进入画展时会被清理掉（见下方修复）
         galleryNotify.textContent = "👉 对方想再来一局，等你确认！";
     });
 
     socket.on('game_over', (drawings) => { showSettlement(drawings.top, drawings.bottom); });
 
     socket.on('show_gallery', (galleryData) => {
-        settlementScreen.style.display = 'none'; galleryScreen.style.display = 'flex';
+        settlementScreen.style.display = 'none'; 
+        galleryScreen.style.display = 'flex';
+        
+        // 【核心修复】强制清空上一轮残留的继续提示，恢复按钮默认状态
+        galleryNotify.textContent = '';
+        galleryRestartBtn.disabled = false; 
+        galleryRestartBtn.textContent = '再来一局 (全新6词)'; 
+        galleryRestartBtn.style.backgroundColor = '#8bc34a';
+        
         galleryGrid.innerHTML = '';
         galleryData.forEach((item, index) => {
             galleryGrid.innerHTML += `
@@ -267,7 +272,6 @@
     document.getElementById('exitBtn').addEventListener('click', sendExit);
     document.getElementById('galleryExitBtn').addEventListener('click', sendExit);
 
-    // --- 全新的绘画轨迹记录系统 ---
     document.getElementById('lineWidthSlider').addEventListener('input', (e) => currentLineWidth = e.target.value);
 
     function getPos(e) {
@@ -278,14 +282,11 @@
     }
 
     function startDrawing(e) {
-        if (e.target !== activeCanvas) return; // 防止误触对方画板
+        if (e.target !== activeCanvas) return; 
         if (e.cancelable) e.preventDefault();
         isDrawing = true; 
         const pos = getPos(e);
-        
-        // 开始记录新的一笔
         currentPath = { color: currentColor, width: currentLineWidth, points: [pos] };
-        
         ctx.beginPath(); ctx.strokeStyle = currentColor; ctx.lineWidth = currentLineWidth;
         ctx.moveTo(pos.x, pos.y); ctx.lineTo(pos.x, pos.y); ctx.stroke();
     }
@@ -294,7 +295,7 @@
         if (!isDrawing) return; 
         if (e.cancelable) e.preventDefault(); 
         const pos = getPos(e); 
-        currentPath.points.push(pos); // 记录轨迹点
+        currentPath.points.push(pos); 
         ctx.lineTo(pos.x, pos.y); ctx.stroke(); 
     }
     
@@ -303,12 +304,11 @@
             if (e.cancelable) e.preventDefault(); 
             isDrawing = false; 
             ctx.closePath(); 
-            paths.push(currentPath); // 将这一笔正式存入数组
+            paths.push(currentPath); 
             checkStatus();
         } 
     }
 
-    // 将事件绑定到两个 Canvas，但通过上面的 e.target 判断拦截
     [topCanvas, bottomCanvas].forEach(cvs => {
         cvs.addEventListener('mousedown', startDrawing); cvs.addEventListener('mousemove', draw);
         cvs.addEventListener('mouseup', stopDrawing); cvs.addEventListener('mouseout', stopDrawing);
@@ -316,7 +316,6 @@
         cvs.addEventListener('touchend', stopDrawing, {passive: false});
     });
 
-    // 重新绘制所有笔画
     function redrawAll() {
         ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
         paths.forEach(path => {
@@ -338,18 +337,12 @@
         else submitBtn.classList.remove('active');
     }
 
-    // 撤销按钮
     document.getElementById('undoBtn').addEventListener('click', () => {
-        if (paths.length > 0) {
-            paths.pop(); // 删掉最后一笔
-            redrawAll(); // 重绘剩下的
-        }
+        if (paths.length > 0) { paths.pop(); redrawAll(); }
     });
 
-    // 清空按钮
     document.getElementById('clearBtn').addEventListener('click', () => {
-        paths = [];
-        redrawAll();
+        paths = []; redrawAll();
     });
 
     submitBtn.addEventListener('click', () => {
