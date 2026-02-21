@@ -7,13 +7,12 @@ app.use(express.static('public'));
 
 let players = []; 
 let drawings = {}; 
-let gallery = []; // 【新增】用于存放这一轮 6 张画作的画廊
+let gallery = []; 
 let currentRound = 1;
-const MAX_ROUNDS = 6; // 【新增】最大回合数
-let selectedWords = []; // 当前这局选中的 6 个词
-let gameState = 'waiting'; // 状态机: waiting, playing, settlement, gallery
+const MAX_ROUNDS = 6; 
+let selectedWords = []; 
+let gameState = 'waiting'; 
 
-// 用户提供的完整题库
 const words = [
     "外星人", "雪人", "稻草人", "机器人", "美人鱼", "半人马", "奥特曼", "蜘蛛侠", "蝙蝠侠", "孙悟空", 
     "猪八戒", "小黄人", "海绵宝宝", "派大星", "皮卡丘", "马里奥", 
@@ -27,9 +26,7 @@ const words = [
     "落地大摆钟", "吉他", "麦克风", "高脚杯", "奖杯", "沙漏", "香水瓶", "蒙娜丽莎", "皮卡丘"
 ];
 
-// 初始化/重置一整局游戏（6轮）
 function initGame() {
-    // 随机洗牌并抽取 6 个词
     let shuffled = [...words].sort(() => 0.5 - Math.random());
     selectedWords = shuffled.slice(0, MAX_ROUNDS);
     currentRound = 1;
@@ -37,16 +34,27 @@ function initGame() {
     startRound();
 }
 
-// 开始单个回合
 function startRound() {
     players.forEach(p => p.wantsToContinue = false); 
     drawings = {}; 
     gameState = 'playing';
-    io.emit('game_start', {
-        word: selectedWords[currentRound - 1],
-        round: currentRound,
-        total: MAX_ROUNDS
-    }); 
+
+    // 【核心优化】：每一轮开始时，随机打乱两人的上下位置
+    if (players.length === 2) {
+        const isTopFirst = Math.random() > 0.5;
+        players[0].role = isTopFirst ? 'top' : 'bottom';
+        players[1].role = isTopFirst ? 'bottom' : 'top';
+    }
+
+    // 单独给每个玩家发送属于他的新身份
+    players.forEach(p => {
+        io.to(p.id).emit('game_start', {
+            word: selectedWords[currentRound - 1],
+            round: currentRound,
+            total: MAX_ROUNDS,
+            role: p.role
+        });
+    });
 }
 
 io.on('connection', (socket) => {
@@ -55,30 +63,23 @@ io.on('connection', (socket) => {
         return;
     }
 
-    const isTopTaken = players.some(p => p.role === 'top');
-    const role = isTopTaken ? 'bottom' : 'top';
-    players.push({ id: socket.id, role: role, wantsToContinue: false });
+    // 刚进来先随便给个占位身份，真正开始时会重新分配
+    players.push({ id: socket.id, role: 'waiting', wantsToContinue: false });
     
-    socket.emit('assign_role', role); 
     socket.emit('system_msg', `你是玩家 ${players.length}。等待对手...`);
 
-    // 凑齐两人，开启全新的一局
     if (players.length === 2) {
         initGame();
     }
 
-    // 接收画作
     socket.on('submit_drawing', (imageData) => {
         const player = players.find(p => p.id === socket.id);
         if (player) {
             drawings[player.role] = imageData; 
-            
-            // 【核心新增】广播给对方：他已经交卷了
             socket.broadcast.emit('partner_submitted');
             
             if (Object.keys(drawings).length === 2) {
                 gameState = 'settlement';
-                // 存入画廊记录
                 gallery.push({
                     word: selectedWords[currentRound - 1],
                     top: drawings.top,
@@ -91,30 +92,24 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 处理玩家点击“继续”或“再来一轮”
     socket.on('request_continue', () => {
         const player = players.find(p => p.id === socket.id);
         if (player) {
             player.wantsToContinue = true; 
-            // 【核心新增】广播给对方：他已经点继续了
             socket.broadcast.emit('partner_continued');
             
             const readyCount = players.filter(p => p.wantsToContinue).length;
             if (readyCount === 2 && players.length === 2) {
-                // 两人都准备好了，判断接下来的流程
                 if (gameState === 'settlement') {
                     if (currentRound < MAX_ROUNDS) {
-                        // 还没到6轮，继续下一轮
                         currentRound++;
                         startRound();
                     } else {
-                        // 6轮结束，进入最终画展！
                         gameState = 'gallery';
-                        players.forEach(p => p.wantsToContinue = false); // 重置准备状态，给画展页用
+                        players.forEach(p => p.wantsToContinue = false); 
                         io.emit('show_gallery', gallery);
                     }
                 } else if (gameState === 'gallery') {
-                    // 在画展页面双方都点了“再来一轮”，完全重置游戏
                     initGame();
                 }
             }
